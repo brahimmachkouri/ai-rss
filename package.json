@@ -1,0 +1,13 @@
+{
+  "name": "cnet-ai-atlas-rss",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "generate_rss.js",
+  "scripts": {
+    "generate": "node generate_rss.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "cheerio": "^1.0.0-rc.12"
+  }
+}
