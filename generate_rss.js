@@ -73,6 +73,34 @@ $(linkSelector).each((_, el) => {
   if (!items.find(i => i.url === url)) {
     items.push({ title, url, date });
   }
+
+  // 3.e) Images
+  let imageUrl;
+
+  // si c'est une carte "Highlights" ou "Lead"
+  if ($a.is(".c-storiesNeonHighlightsCard_link, .c-storiesNeonHighlightsLead_link")) {
+    // on cherche l'<img> dans la div .c-storiesNeonHighlightsCard_media
+    imageUrl = $a
+      .find(".c-storiesNeonHighlightsCard_media img")
+      .attr("src");
+  }
+
+  // si c'est une carte "Latest"
+  else if ($a.is(".c-storiesNeonLatest_story")) {
+    imageUrl = $a
+      .find(".c-storiesNeonLatest_img img")
+      .attr("src");
+  }
+
+  // normalisation d'URL relative
+  if (imageUrl && imageUrl.startsWith("/")) {
+    imageUrl = ROOT + imageUrl;
+  }
+
+  // on l’injecte ensuite dans <enclosure> si définie
+  if (imageUrl) {
+    rss += `<enclosure url="${imageUrl}" type="image/jpeg"/>`;
+  }
 });
 
 // Debug : nombre d’articles extraits
