@@ -7,13 +7,13 @@ import fs from "fs";
 const ROOT = "https://www.cnet.com";
 const URL  = `${ROOT}/ai-atlas/`;
 
-// 1) Récupération de la page
+// 1) Récupérer la page
 const { data } = await axios.get(URL, {
   headers: { "User-Agent": "Mozilla/5.0 (RSS bot)" }
 });
 const $ = cheerio.load(data);
 
-// 2) Sélecteur pour toutes les “cartes” <a>
+// 2) Sélecteur pour toutes les cartes <a>, y compris celles du carrousel
 const linkSelector = [
   "a.c-storiesNeonHighlightsCard_link",
   "div.c-storiesNeonBestCarousel_story a",
@@ -22,20 +22,17 @@ const linkSelector = [
   "a.c-storiesNeonHighlightsLead_link"
 ].join(",");
 
-// Debug : nombre de cartes détectées
+// Debug : combien de cartes ont été détectées ?
 console.log("Debug: cartes trouvées =", $(linkSelector).length);
-console.log('– Debug – Sélecteur titres :', $(' .c-storiesNeonLatest_hed, .c-storiesNeonMeta_hedContent').length);
-console.log('– Debug – Sélecteur dates  :', $(' .c-storiesNeonMeta_date, .c-storiesNeonLatest_meta').length);
 
 const items = [];
 
-// 3) Boucle sur chaque carte <a>
+// 3) Extraction des données dans chaque <a>
 $(linkSelector).each((_, el) => {
-  const $a = $(el);
+  const $a   = $(el);
   const href = $a.attr("href");
   if (!href) return;
 
-  // Construction de l'URL absolue
   const url = href.startsWith("http") ? href : ROOT + href;
 
   // 3.a) Titre via classes dédiées
@@ -44,69 +41,47 @@ $(linkSelector).each((_, el) => {
     .text()
     .trim();
 
-  // 3.b) Fallback : texte brut du <a> si pas de titre détecté
+  // Fallback : tout le texte de la balise <a>
   if (!title) {
     title = $a
       .text()
-      .replace(/\s+By.+$/i, "")             // supprime “By …”
-      .replace(/\d{1,2}\s*(hours?|days?)\s*ago/i, "") // supprime “X hours/days ago”
-      .replace(/\d{2}\/\d{2}\/\d{4}/, "")    // supprime dates “06/10/2025”
+      .replace(/\s+By.+$/i, "")
+      .replace(/\d{1,2}\s*(hours?|days?)\s*ago/i, "")
+      .replace(/\d{2}\/\d{2}\/\d{4}/, "")
       .trim();
   }
   if (!title) return;
 
-  // 3.c) Date : préférence à l'attribut datetime, sinon texte brut, sinon now
-  let date = 
-      $a.find(".c-storiesNeonMeta_date, .c-storiesNeonLatest_meta")
-        .attr("datetime")
-    || $a.find(".c-storiesNeonMeta_date, .c-storiesNeonLatest_meta")
-        .text()
-        .trim()
+  // 3.b) Date : préférer datetime, sinon texte, sinon maintenant
+  let date =
+      $a.find(".c-storiesNeonMeta_date, .c-storiesNeonLatest_meta").attr("datetime")
+    || $a.find(".c-storiesNeonMeta_date, .c-storiesNeonLatest_meta").text().trim()
     || new Date().toISOString();
-
-  // Si date du type “X ago”, on remplace par l'instant présent
   if (/ago$/i.test(date)) {
     date = new Date().toISOString();
   }
 
-  // 3.d) Dé-doublonnage
+  // 3.c) Image (selon type de carte)
+  let image;
+  if ($a.is("a.c-storiesNeonHighlightsCard_link, a.c-storiesNeonHighlightsLead_link")) {
+    image = $a.find(".c-storiesNeonHighlightsCard_media img").attr("src");
+  } else if ($a.is("a.c-storiesNeonLatest_story")) {
+    image = $a.find(".c-storiesNeonLatest_img img").attr("src");
+  }
+  if (image && image.startsWith("/")) {
+    image = ROOT + image;
+  }
+
+  // 3.d) Dé-doublonnage et collecte
   if (!items.find(i => i.url === url)) {
-    items.push({ title, url, date });
-  }
-
-  // 3.e) Images
-  let imageUrl;
-
-  // si c'est une carte "Highlights" ou "Lead"
-  if ($a.is(".c-storiesNeonHighlightsCard_link, .c-storiesNeonHighlightsLead_link")) {
-    // on cherche l'<img> dans la div .c-storiesNeonHighlightsCard_media
-    imageUrl = $a
-      .find(".c-storiesNeonHighlightsCard_media img")
-      .attr("src");
-  }
-
-  // si c'est une carte "Latest"
-  else if ($a.is(".c-storiesNeonLatest_story")) {
-    imageUrl = $a
-      .find(".c-storiesNeonLatest_img img")
-      .attr("src");
-  }
-
-  // normalisation d'URL relative
-  if (imageUrl && imageUrl.startsWith("/")) {
-    imageUrl = ROOT + imageUrl;
-  }
-
-  // on l’injecte ensuite dans <enclosure> si définie
-  if (imageUrl) {
-    rss += `<enclosure url="${imageUrl}" type="image/jpeg"/>`;
+    items.push({ title, url, date, image });
   }
 });
 
-// Debug : nombre d’articles extraits
+// Debug : combien d’articles extraits ?
 console.log("Debug: articles extraits =", items.length);
 
-// 4) Construction du flux RSS
+// 4) Génération du XML RSS
 let rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 <channel>
@@ -120,7 +95,15 @@ for (const it of items) {
     <title>${it.title}</title>
     <link>${it.url}</link>
     <guid>${it.url}</guid>
-    <pubDate>${new Date(it.date).toUTCString()}</pubDate>
+    <pubDate>${new Date(it.date).toUTCString()}</pubDate>`;
+  
+  // 4.a) Si on a une image, on ajoute une enclosure
+  if (it.image) {
+    rss += `
+    <enclosure url="${it.image}" type="image/jpeg"/>`;
+  }
+
+  rss += `
   </item>`;
 }
 
@@ -128,8 +111,8 @@ rss += `
 </channel>
 </rss>`;
 
-// 5) Écriture du fichier dans public/rss.xml
+// 5) Écriture du fichier RSS
 fs.mkdirSync("public", { recursive: true });
 fs.writeFileSync("public/rss.xml", rss, "utf-8");
 
-console.log(`rss.xml généré avec ${items.length} article(s).`);
+console.log(`rss.xml généré avec ${items.length} article(s), images incluses quand disponibles.`);
