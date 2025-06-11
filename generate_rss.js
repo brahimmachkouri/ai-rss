@@ -1,7 +1,7 @@
 // generate_rss.js
-const axios = require('axios');
-const cheerio = require('cheerio');
-const fs = require('fs');
+import axios from "axios";
+import cheerio from "cheerio";
+import fs from "fs";
 
 (async () => {
     const url = 'https://www.cnet.com/ai-atlas/';
