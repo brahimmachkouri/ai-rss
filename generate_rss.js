@@ -1,4 +1,4 @@
-// generate_rss.js  (ES modules)
+// generate_rss.js (ES modules)
 import axios from "axios";
 import * as cheerio from "cheerio";
 import fs from "fs";
@@ -6,13 +6,12 @@ import fs from "fs";
 const ROOT = "https://www.cnet.com";
 const URL  = `${ROOT}/ai-atlas/`;
 
-// 1) Récupération de la page
 const { data } = await axios.get(URL, {
   headers: { "User-Agent": "Mozilla/5.0 (RSS bot)" }
 });
 const $ = cheerio.load(data);
 
-// 2) Sélecteur global couvrant toutes les classes trouvées
+// 1) Sélecteur pour les liens aux articles
 const linkSelector = [
   "a.c-storiesNeonHighlightsCard_link",
   "a.c-storiesNeonBestCarousel_story",
@@ -21,32 +20,49 @@ const linkSelector = [
   "a.c-storiesNeonHighlightsLead_link"
 ].join(",");
 
-// 3) Extraction
 const items = [];
-
 $(linkSelector).each((_, el) => {
-  const href  = $(el).attr("href");
-  let  title  = $(el).text().trim();
-  if (href && title) {
-    title = title
-      .replace(/\s+By.+$/i, '')        // retire « By … »
-      .replace(/\d{2}\/\d{2}\/\d{4}/, '') // retire dates « 06/10/2025 »
-      .trim();
+  // URL
+  const href = $(el).attr("href");
+  if (!href) return;
+  const url = href.startsWith("http") ? href : ROOT + href;
 
-    const url   = href.startsWith('http') ? href : ROOT + href;
-    const date  = $(el).closest('article').find('time').attr('datetime')
-                  || new Date().toISOString();
+  // On cherche le container <article> parent
+  const article = $(el).closest("article");
 
-    if (!items.find(i => i.url === url)) items.push({ title, url, date });
+  // 2) Titre
+  let title = article.find(".c-storiesNeonLatest_hed, .c-storiesNeonMeta_hedContent")
+                     .text().trim();
+  // Nettoyage éventuel
+  title = title
+    .replace(/\s+By.+$/i, "")
+    .replace(/\d{2}\/\d{2}\/\d{4}/, "")
+    .trim();
+  if (!title) return;  // skip si vide
+
+  // 3) Date
+  // Plusieurs formats : on prend le datetime si dispo, sinon texte brut
+  let date = article.find(".c-storiesNeonMeta_date, .c-storiesNeonLatest_meta")
+                    .attr("datetime")
+             || article.find(".c-storiesNeonMeta_date, .c-storiesNeonLatest_meta")
+                       .text().trim()
+             || new Date().toISOString();
+
+  // Si date texte du type "1 day ago", on laisse tomber et on met ISO now
+  if (/ago$/i.test(date)) date = new Date().toISOString();
+
+  // Dé-doublonnage
+  if (!items.find(i => i.url === url)) {
+    items.push({ title, url, date });
   }
 });
 
-// 4) Construction du flux RSS
+// 4) Génération du XML RSS
 let rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
-<title>CNET – AI Atlas</title>
-<link>${URL}</link>
-<description>Flux non officiel généré par GitHub Actions</description>`;
+  <title>CNET – AI Atlas</title>
+  <link>${URL}</link>
+  <description>Flux non officiel généré par GitHub Actions</description>`;
 
 for (const it of items) {
   rss += `
@@ -61,7 +77,8 @@ for (const it of items) {
 rss += `
 </channel></rss>`;
 
-// 5) Écriture dans /public/rss.xml
+// 5) Écriture
 fs.mkdirSync("public", { recursive: true });
-fs.writeFileSync("public/rss.xml", rss);
+fs.writeFileSync("public/rss.xml", rss, "utf-8");
 console.log(`RSS généré : ${items.length} article(s).`);
+
