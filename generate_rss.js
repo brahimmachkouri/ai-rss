@@ -1,4 +1,3 @@
-// generate_rss.js (ES modules)
 import axios from "axios";
 import * as cheerio from "cheerio";
 import fs from "fs";
@@ -11,44 +10,34 @@ const { data } = await axios.get(URL, {
 });
 const $ = cheerio.load(data);
 
-// 1) Sélecteur pour les liens aux articles
-const linkSelector = [
-  "a.c-storiesNeonHighlightsCard_link",
-  "a.c-storiesNeonBestCarousel_story",
-  "a.c-storiesNeonBestCarousel_story-atlas",
-  "a.c-storiesNeonLatest_story",
-  "a.c-storiesNeonHighlightsLead_link"
-].join(",");
+// Debug global
+console.log('Nombre d\'<article> trouvés :', $('article').length);
+console.log('– Debug – Sélecteur titres :', $(' .c-storiesNeonLatest_hed, .c-storiesNeonMeta_hedContent').length);
+console.log('– Debug – Sélecteur dates  :', $(' .c-storiesNeonMeta_date, .c-storiesNeonLatest_meta').length);
 
 const items = [];
-$(linkSelector).each((_, el) => {
-  // URL
-  const href = $(el).attr("href");
+$('article').each((_, art) => {
+  const $art = $(art);
+
+  // 1) Titre
+  let title = $art.find('.c-storiesNeonLatest_hed, .c-storiesNeonMeta_hedContent')
+                  .text().trim();
+  if (!title) return;
+
+  // 2) Lien
+  // On cherche d’abord un <a> parent du titre, sinon on prend le premier <a> dans l'article
+  let href = $art.find('.c-storiesNeonLatest_hed a, .c-storiesNeonMeta_hedContent a')
+                 .attr('href')
+         || $art.find('a').first().attr('href');
   if (!href) return;
-  const url = href.startsWith("http") ? href : ROOT + href;
-
-  // On cherche le container <article> parent
-  const article = $(el).closest("article");
-
-  // 2) Titre
-  let title = article.find(".c-storiesNeonLatest_hed, .c-storiesNeonMeta_hedContent")
-                     .text().trim();
-  // Nettoyage éventuel
-  title = title
-    .replace(/\s+By.+$/i, "")
-    .replace(/\d{2}\/\d{2}\/\d{4}/, "")
-    .trim();
-  if (!title) return;  // skip si vide
+  const url = href.startsWith('http') ? href : ROOT + href;
 
   // 3) Date
-  // Plusieurs formats : on prend le datetime si dispo, sinon texte brut
-  let date = article.find(".c-storiesNeonMeta_date, .c-storiesNeonLatest_meta")
-                    .attr("datetime")
-             || article.find(".c-storiesNeonMeta_date, .c-storiesNeonLatest_meta")
-                       .text().trim()
-             || new Date().toISOString();
-
-  // Si date texte du type "1 day ago", on laisse tomber et on met ISO now
+  let date = $art.find('.c-storiesNeonMeta_date, .c-storiesNeonLatest_meta')
+                .attr('datetime')
+         || $art.find('.c-storiesNeonMeta_date, .c-storiesNeonLatest_meta')
+                .text().trim()
+         || new Date().toISOString();
   if (/ago$/i.test(date)) date = new Date().toISOString();
 
   // Dé-doublonnage
@@ -57,7 +46,8 @@ $(linkSelector).each((_, el) => {
   }
 });
 
-// 4) Génération du XML RSS
+console.log(`Debug : articles extraits = ${items.length}`);
+
 let rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
   <title>CNET – AI Atlas</title>
@@ -77,8 +67,6 @@ for (const it of items) {
 rss += `
 </channel></rss>`;
 
-// 5) Écriture
 fs.mkdirSync("public", { recursive: true });
 fs.writeFileSync("public/rss.xml", rss, "utf-8");
-console.log(`RSS généré : ${items.length} article(s).`);
-
+console.log('rss.xml généré avec', items.length, 'article(s).');
