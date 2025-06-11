@@ -4,6 +4,15 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import fs from "fs";
 
+function escapeXml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 const ROOT = "https://www.cnet.com";
 const URL  = `${ROOT}/ai-atlas/`;
 
@@ -85,22 +94,25 @@ console.log("Debug: articles extraits =", items.length);
 let rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 <channel>
-  <title>CNET – AI Atlas</title>
-  <link>${URL}</link>
-  <description>Flux non officiel généré par GitHub Actions</description>`;
+  <title>${escapeXml("CNET – AI Atlas")}</title>
+  <link>${escapeXml(URL)}</link>
+  <description>${escapeXml("Flux non officiel généré par GitHub Actions")}</description>`;
 
 for (const it of items) {
+  const title = escapeXml(it.title);
+  const link  = escapeXml(it.url);
+  const pubDate = new Date(it.date).toUTCString();
   rss += `
   <item>
-    <title>${it.title}</title>
-    <link>${it.url}</link>
-    <guid>${it.url}</guid>
-    <pubDate>${new Date(it.date).toUTCString()}</pubDate>`;
+    <title>${title}</title>
+    <link>${link}</link>
+    <guid>${link}</guid>
+    <pubDate>${pubDate}</pubDate>`;
   
-  // 4.a) Si on a une image, on ajoute une enclosure
   if (it.image) {
+    const img = escapeXml(it.image);
     rss += `
-    <enclosure url="${it.image}" type="image/jpeg"/>`;
+    <enclosure url="${img}" type="image/jpeg"/>`;
   }
 
   rss += `
