@@ -23,21 +23,21 @@ const linkSelector = [
 
 // 3) Extraction
 const items = [];
+
 $(linkSelector).each((_, el) => {
   const href  = $(el).attr("href");
-  const title = $(el).text().trim();
+  let  title  = $(el).text().trim();
   if (href && title) {
-    // Corrige les URL relatives / absolues
-    const url = href.startsWith("http") ? href : ROOT + href;
-    // Dé-doublonne (au cas où le même lien apparaît plusieurs fois)
-    if (!items.find(i => i.url === url)) {
-      // On peut aussi récupérer la date réelle :
-      const date =
-        $(el).closest("article").find("time").attr("datetime") ||
-        new Date().toISOString();
+    title = title
+      .replace(/\s+By.+$/i, '')        // retire « By … »
+      .replace(/\d{2}\/\d{2}\/\d{4}/, '') // retire dates « 06/10/2025 »
+      .trim();
 
-      items.push({ title, url, date });
-    }
+    const url   = href.startsWith('http') ? href : ROOT + href;
+    const date  = $(el).closest('article').find('time').attr('datetime')
+                  || new Date().toISOString();
+
+    if (!items.find(i => i.url === url)) items.push({ title, url, date });
   }
 });
 
