@@ -16,8 +16,8 @@ const $ = cheerio.load(data);
 // 2) Sélecteur pour toutes les “cartes” <a>
 const linkSelector = [
   "a.c-storiesNeonHighlightsCard_link",
-  "a.c-storiesNeonBestCarousel_story",
-  "a.c-storiesNeonBestCarousel_story-atlas",
+  "div.c-storiesNeonBestCarousel_story a",
+  "div.c-storiesNeonBestCarousel_story-atlas a",
   "a.c-storiesNeonLatest_story",
   "a.c-storiesNeonHighlightsLead_link"
 ].join(",");
